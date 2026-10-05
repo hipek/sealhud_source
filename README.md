@@ -44,6 +44,18 @@ The channel is shared by all three layouts. Messages from common bots (Nightbot,
 
 ---
 
+## 📦 Building Artifacts
+
+Build the production files with Docker (no local Node.js needed):
+
+```bash
+make artifacts
+```
+
+The static files are written to `.artifacts/`. Copy its contents to any HTTP server and point RaceRoom at it with `-webHudUrl=http://<server>/`. Run `make clean-artifacts` to empty the folder.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome!  
