@@ -32,6 +32,18 @@ RaceRoom's shared memory requires local TCP port 8070 to share data. Certain thi
 
 ---
 
+## 💬 Twitch Chat
+
+SealHUD can show the live chat of a Twitch channel, plus its viewer count, right on your HUD. No Twitch login is needed.
+
+1. Open the SealHUD **Settings** and enable the **Twitch Chat** widget.
+2. Tick **Change Twitch Channel**, click the text field, type the channel name (e.g. `yourchannel`, without `twitch.tv/`) and press **Enter**.
+3. Drag the chat where you want it. Use the mouse wheel or the **−/+** buttons (shown on hover) to make it smaller or bigger.
+
+The channel is shared by all three layouts. Messages from common bots (Nightbot, StreamElements, …) are hidden by default; use **Edit Bot List** to change which accounts are hidden.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome!  
