@@ -8,7 +8,8 @@ import {
 import {
 	TwitchChatClient,
 	IChatMessage,
-	fetchViewerCount,
+	fetchStreamStatus,
+	IStreamStatus,
 	sanitizeChannel
 } from '../../lib/twitchChat';
 import { action, observable } from 'mobx';
@@ -23,7 +24,7 @@ interface IProps extends React.HTMLAttributes<HTMLDivElement> {
 	botLogins: string[];
 }
 
-const VIEWER_POLL_MS = 60000;
+const STATUS_POLL_MS = 60000;
 const FADE_AFTER_MS = 60000;
 const ZOOM_STEP = 0.05;
 const ZOOM_STEP_SHIFT = 0.2;
@@ -91,22 +92,20 @@ export default class TwitchChat extends React.Component<IProps> {
 	@observable accessor messages: IChatMessage[] = [];
 	@observable accessor connected = false;
 	@observable accessor viewers = 0;
+	@observable accessor live = false;
 
 	client: TwitchChatClient | null = null;
 	pending: IChatMessage[] = [];
 	flushTimer: ReturnType<typeof setInterval> | null = null;
-	viewerTimer: ReturnType<typeof setInterval> | null = null;
-	viewerRequest = 0;
-	// subSettings are mutated in place, so prevProps can't detect a toggle
-	lastShowViewers = true;
+	statusTimer: ReturnType<typeof setInterval> | null = null;
+	statusRequest = 0;
 
 	componentDidMount() {
-		this.lastShowViewers = this.props.settings.subSettings.showViewers.enabled;
 		this.flushTimer = setInterval(
 			this.flush,
 			lowPerformanceMode ? 500 : 250
 		);
-		this.viewerTimer = setInterval(this.pollViewers, VIEWER_POLL_MS);
+		this.statusTimer = setInterval(this.pollStatus, STATUS_POLL_MS);
 		this.start();
 	}
 
@@ -122,11 +121,6 @@ export default class TwitchChat extends React.Component<IProps> {
 				this.props.settings.subSettings.showEmotes.enabled;
 			this.client.botLogins = this.props.botLogins;
 		}
-		const showViewers = this.props.settings.subSettings.showViewers.enabled;
-		if (showViewers && !this.lastShowViewers) {
-			this.pollViewers();
-		}
-		this.lastShowViewers = showViewers;
 	}
 
 	componentWillUnmount() {
@@ -134,8 +128,8 @@ export default class TwitchChat extends React.Component<IProps> {
 		if (this.flushTimer) {
 			clearInterval(this.flushTimer);
 		}
-		if (this.viewerTimer) {
-			clearInterval(this.viewerTimer);
+		if (this.statusTimer) {
+			clearInterval(this.statusTimer);
 		}
 	}
 
@@ -148,6 +142,7 @@ export default class TwitchChat extends React.Component<IProps> {
 		this.pending = [];
 		this.messages = [];
 		this.viewers = 0;
+		this.live = false;
 		const channel = sanitizeChannel(this.props.channel);
 		if (!channel) {
 			return;
@@ -164,7 +159,7 @@ export default class TwitchChat extends React.Component<IProps> {
 		this.client.showEmotes = sub.showEmotes.enabled;
 		this.client.botLogins = this.props.botLogins;
 		this.client.connect();
-		this.pollViewers();
+		this.pollStatus();
 	}
 
 	private stop() {
@@ -206,8 +201,9 @@ export default class TwitchChat extends React.Component<IProps> {
 	};
 
 	@action
-	private setViewers = (viewers: number) => {
-		this.viewers = viewers;
+	private setStatus = (status: IStreamStatus) => {
+		this.live = status.live;
+		this.viewers = status.viewers;
 	};
 
 	// Batched so a busy channel doesn't re-render the HUD per message.
@@ -236,20 +232,18 @@ export default class TwitchChat extends React.Component<IProps> {
 		}
 	};
 
-	private pollViewers = () => {
+	// Polled even when the viewer count is hidden: it drives the live dot.
+	private pollStatus = () => {
 		const channel = sanitizeChannel(this.props.channel);
-		if (
-			!channel ||
-			document.hidden ||
-			!this.props.settings.subSettings.showViewers.enabled
-		) {
+		if (!channel || document.hidden) {
 			return;
 		}
-		const request = ++this.viewerRequest;
-		fetchViewerCount(channel).then((count) => {
-			// Ignore answers for a channel we already switched away from
-			if (request === this.viewerRequest) {
-				this.setViewers(count);
+		const request = ++this.statusRequest;
+		fetchStreamStatus(channel).then((status) => {
+			// Ignore answers for a channel we already switched away from,
+			// and keep the last known state when the answer is unknown.
+			if (status && request === this.statusRequest) {
+				this.setStatus(status);
 			}
 		});
 	};
@@ -337,8 +331,9 @@ export default class TwitchChat extends React.Component<IProps> {
 					</span>
 					<span
 						className={classNames('chatStatus', {
-							online: this.connected || showAllMode
+							live: this.live || showAllMode
 						})}
+						title={this.live || showAllMode ? 'LIVE' : 'Offline'}
 					/>
 					<span className="chatSpacer" />
 					{sub.showViewers.enabled && (

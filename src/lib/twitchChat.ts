@@ -206,22 +206,36 @@ export function buildFragments(
 	return fragments;
 }
 
-export function parseViewerCount(text: string): number {
-	const value = (text || '').trim();
-	return /^\d+$/.test(value) ? parseInt(value, 10) : 0;
+export interface IStreamStatus {
+	live: boolean;
+	viewers: number;
 }
 
 // DecAPI: plain text body, number when live, "<channel> is offline" otherwise.
+// Anything else (errors, rate limits) is unknown and returns null.
+export function parseStreamStatus(text: string): IStreamStatus | null {
+	const value = (text || '').trim();
+	if (/^\d+$/.test(value)) {
+		return { live: true, viewers: parseInt(value, 10) };
+	}
+	if (/ is offline$/i.test(value)) {
+		return { live: false, viewers: 0 };
+	}
+	return null;
+}
+
 // Simple GET without custom headers, so no CORS preflight is triggered.
-export function fetchViewerCount(channel: string): Promise<number> {
+export function fetchStreamStatus(
+	channel: string
+): Promise<IStreamStatus | null> {
 	const clean = sanitizeChannel(channel);
 	if (!clean) {
-		return Promise.resolve(0);
+		return Promise.resolve(null);
 	}
 	return fetch(VIEWER_COUNT_URL + encodeURIComponent(clean))
 		.then((resp) => (resp.ok ? resp.text() : ''))
-		.then(parseViewerCount)
-		.catch(() => 0);
+		.then(parseStreamStatus)
+		.catch(() => null);
 }
 
 interface IClientOptions {

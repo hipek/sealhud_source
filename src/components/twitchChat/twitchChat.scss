@@ -62,8 +62,9 @@
     border-radius: 50%;
     background: #666;
 
-    &.online {
-      background: #3ccf4e;
+    &.live {
+      background: #eb0400;
+      box-shadow: 0 0 4px rgba(235, 4, 0, 0.8);
     }
   }
 
