@@ -17,6 +17,11 @@ ENV SENTRY_DSN=$SENTRY_DSN \
 
 RUN npm run build && find dist -name '*.map' -delete
 
+# --- Artifacts stage: only the static files, for `make artifacts` ---
+# docker build --target artifacts --output type=local,dest=.artifacts .
+FROM scratch AS artifacts
+COPY --from=build /app/dist /
+
 # --- Runtime stage: tiny static file server ---
 FROM busybox:1.37-musl
 

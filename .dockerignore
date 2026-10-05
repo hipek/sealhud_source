@@ -8,3 +8,4 @@ webpack
 Dockerfile
 compose.yaml
 .dockerignore
+.artifacts
