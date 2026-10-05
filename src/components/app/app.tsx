@@ -69,11 +69,11 @@ import SvgIcon from "../svgIcon/svgIcon";
 import Tires from "../tires/tires";
 import TvTower from "../tvTower/tvTower";
 import TwitchChat from "../twitchChat/twitchChat";
+import TwitchChatSettings from "../twitchChat/twitchChatSettings";
 import {
-  DEFAULT_BOT_LOGINS,
-  parseBotList,
-  sanitizeChannel,
-} from "../../lib/twitchChat";
+  twitchChatConfig,
+  twitchChatDefaultSettings,
+} from "../twitchChat/twitchChatConfig";
 
 interface IProps {}
 
@@ -980,53 +980,7 @@ export default class App extends React.Component<IProps> {
         y: 150,
       },
     },
-    twitchChat: {
-      id: "twitchChat",
-      enabled: false,
-      resetIt: false,
-      volume: 0,
-      duration: 0,
-      zoom: 1,
-      name: __("Twitch Chat"),
-      subSettings: {
-        twitchChannel: {
-          text: __("Change Twitch Channel"),
-          enabled: false,
-        },
-        showViewers: {
-          text: __("Show Viewer Count"),
-          enabled: true,
-        },
-        hideBots: {
-          text: __("Hide Bot Messages"),
-          enabled: true,
-        },
-        editBotList: {
-          text: __("Edit Bot List"),
-          enabled: false,
-        },
-        showBadges: {
-          text: __("Show Badges"),
-          enabled: false,
-        },
-        showEmotes: {
-          text: __("Show Emotes"),
-          enabled: true,
-        },
-        fadeOld: {
-          text: __("Hide Old Messages"),
-          enabled: false,
-        },
-        darkBackground: {
-          text: __("Dark Background"),
-          enabled: false,
-        },
-      },
-      position: {
-        x: INVALID,
-        y: INVALID,
-      },
-    },
+    twitchChat: twitchChatDefaultSettings(),
     graphs: {
       id: "graphs",
       enabled: false,
@@ -1761,53 +1715,7 @@ export default class App extends React.Component<IProps> {
         y: 150,
       },
     },
-    twitchChat: {
-      id: "twitchChat",
-      enabled: false,
-      resetIt: false,
-      volume: 0,
-      duration: 0,
-      zoom: 1,
-      name: __("Twitch Chat"),
-      subSettings: {
-        twitchChannel: {
-          text: __("Change Twitch Channel"),
-          enabled: false,
-        },
-        showViewers: {
-          text: __("Show Viewer Count"),
-          enabled: true,
-        },
-        hideBots: {
-          text: __("Hide Bot Messages"),
-          enabled: true,
-        },
-        editBotList: {
-          text: __("Edit Bot List"),
-          enabled: false,
-        },
-        showBadges: {
-          text: __("Show Badges"),
-          enabled: false,
-        },
-        showEmotes: {
-          text: __("Show Emotes"),
-          enabled: true,
-        },
-        fadeOld: {
-          text: __("Hide Old Messages"),
-          enabled: false,
-        },
-        darkBackground: {
-          text: __("Dark Background"),
-          enabled: false,
-        },
-      },
-      position: {
-        x: INVALID,
-        y: INVALID,
-      },
-    },
+    twitchChat: twitchChatDefaultSettings(),
     graphs: {
       id: "graphs",
       enabled: false,
@@ -1839,18 +1747,6 @@ export default class App extends React.Component<IProps> {
   };
 
   @observable accessor logoUrlEdit = false;
-  // Twitch channel and bot list are global (shared by all layouts)
-  @observable accessor twitchChannel = sanitizeChannel(
-    localStorage.twitchChannel || ""
-  );
-  @observable accessor twitchChannelDraft = "";
-  @observable accessor twitchChannelEdit = false;
-  @observable accessor twitchBotListText = localStorage.twitchBotList || "";
-  @observable accessor twitchBotLogins: string[] = this.twitchBotListText
-    ? parseBotList(this.twitchBotListText)
-    : DEFAULT_BOT_LOGINS;
-  @observable accessor twitchBotListDraft = "";
-  @observable accessor twitchBotListEdit = false;
   @observable accessor settingsOpacity = 0;
   @observable accessor showSettings = false;
   @observable accessor showRanking = false;
@@ -2153,9 +2049,7 @@ export default class App extends React.Component<IProps> {
         }
       }
       if (eResetId === "twitchChat") {
-        this.twitchChannelEdit = false;
-        this.twitchBotListEdit = false;
-        this.setTwitchBotList("");
+        twitchChatConfig.reset();
       }
       if (eResetId === "positionBar" && this.gainLossPermanentBar) {
         this.toggleGainLossPermanentBar();
@@ -2661,75 +2555,6 @@ export default class App extends React.Component<IProps> {
   private emptyUrl = () => {
     this.hLogoUrl = "";
     this.logoUrlEdit = true;
-  };
-
-  @action
-  private editTwitchChannel = () => {
-    if (this.twitchChannelEdit) {
-      return;
-    }
-    this.twitchChannelDraft = this.twitchChannel;
-    this.twitchChannelEdit = true;
-  };
-
-  @action
-  private changeTwitchChannelDraft = (e: ChangeEvent<HTMLInputElement>) => {
-    this.twitchChannelDraft = e.target.value;
-  };
-
-  @action
-  private commitTwitchChannel = () => {
-    if (!this.twitchChannelEdit) {
-      return;
-    }
-    this.twitchChannel = sanitizeChannel(this.twitchChannelDraft);
-    localStorage.twitchChannel = this.twitchChannel;
-    this.twitchChannelEdit = false;
-    this.settings.twitchChat.subSettings.twitchChannel.enabled = false;
-    this.saveSettings();
-  };
-
-  @action
-  private editTwitchBotList = () => {
-    if (this.twitchBotListEdit) {
-      return;
-    }
-    this.twitchBotListDraft = this.twitchBotLogins.join(", ");
-    this.twitchBotListEdit = true;
-  };
-
-  @action
-  private changeTwitchBotListDraft = (e: ChangeEvent<HTMLInputElement>) => {
-    this.twitchBotListDraft = e.target.value;
-  };
-
-  @action
-  private commitTwitchBotList = () => {
-    if (!this.twitchBotListEdit) {
-      return;
-    }
-    this.setTwitchBotList(parseBotList(this.twitchBotListDraft).join(", "));
-    this.twitchBotListEdit = false;
-    this.settings.twitchChat.subSettings.editBotList.enabled = false;
-    this.saveSettings();
-  };
-
-  @action
-  private setTwitchBotList(text: string) {
-    this.twitchBotListText = text;
-    localStorage.twitchBotList = text;
-    this.twitchBotLogins = text ? parseBotList(text) : DEFAULT_BOT_LOGINS;
-  }
-
-  @action
-  private onTwitchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    } else if (e.key === "Escape") {
-      this.twitchChannelEdit = false;
-      this.twitchBotListEdit = false;
-      e.currentTarget.blur();
-    }
   };
 
   // -> these 2 functions are used for drag the right block on sessionInfo
@@ -3558,8 +3383,8 @@ export default class App extends React.Component<IProps> {
             onMouseDown={this.onMouseDown}
             onWheel={this.onWheel}
             settings={this.settings.twitchChat}
-            channel={this.twitchChannel}
-            botLogins={this.twitchBotLogins}
+            channel={twitchChatConfig.channel}
+            botLogins={twitchChatConfig.botLogins}
           />
         )}
         {this.settings.overtakingAids.enabled && (
@@ -4270,86 +4095,6 @@ export default class App extends React.Component<IProps> {
     });
   }
 
-  private renderTwitchChatSettings(subSettings: ISubSettings) {
-    return Object.keys(subSettings).map((subId) => {
-      if (subId === "twitchChannel" && subSettings.twitchChannel.enabled) {
-        return (
-          <div key={subId} className="subWidget urlInput">
-            <label className="sub">
-              {_(subSettings[subId].text())}
-              <input
-                type="text"
-                className="urlInput"
-                placeholder="channel_name"
-                value={
-                  this.twitchChannelEdit
-                    ? this.twitchChannelDraft
-                    : `${_("Current Channel:")} ${
-                        this.twitchChannel || "-"
-                      } - ${_("Click here to change")}`
-                }
-                onClick={this.editTwitchChannel}
-                onFocus={this.editTwitchChannel}
-                onChange={this.changeTwitchChannelDraft}
-                onKeyDown={this.onTwitchInputKeyDown}
-                onBlur={this.commitTwitchChannel}
-              />
-            </label>
-          </div>
-        );
-      }
-      if (subId === "editBotList" && subSettings.editBotList.enabled) {
-        return (
-          <div key={subId} className="subWidget urlInput">
-            <label className="sub">
-              {_(subSettings[subId].text())}
-              <input
-                type="text"
-                className="urlInput"
-                placeholder="nightbot, streamelements"
-                value={
-                  this.twitchBotListEdit
-                    ? this.twitchBotListDraft
-                    : `${_("Current Bots:")} ${
-                        this.twitchBotLogins.join(", ") || "-"
-                      } - ${_("Click here to change")}`
-                }
-                onClick={this.editTwitchBotList}
-                onFocus={this.editTwitchBotList}
-                onChange={this.changeTwitchBotListDraft}
-                onKeyDown={this.onTwitchInputKeyDown}
-                onBlur={this.commitTwitchBotList}
-              />
-            </label>
-          </div>
-        );
-      }
-      if (subId === "editBotList" && !subSettings.hideBots.enabled) {
-        return null;
-      }
-      return (
-        <div key={subId} className="subWidget">
-          <label
-            className={classNames("sub", {
-              active:
-                subSettings[subId].enabled &&
-                this.settings.twitchChat.enabled,
-            })}
-          >
-            <input
-              type="checkbox"
-              checked={subSettings[subId].enabled}
-              data-name="twitchChat"
-              data-sub-name={subId}
-              onChange={this.toggleSubWidget}
-            />
-            {_(subSettings[subId].text())}
-          </label>
-        </div>
-      );
-    });
-  }
-
   private renderTvTowerSettings(subSettings: ISubSettings) {
     return Object.keys(subSettings).map((subId) => {
       // URL input (Logo)
@@ -4579,7 +4324,13 @@ export default class App extends React.Component<IProps> {
         {widgetId === "positionBarRelative" && subSettings && this.renderPositionBarRelativeSettings(subSettings)}
         {widgetId === "tvTower" && subSettings && this.renderTvTowerSettings(subSettings)}
         {widgetId === "positionBar" && subSettings && this.renderPositionBarSettings(subSettings)}
-        {widgetId === "twitchChat" && subSettings && this.renderTwitchChatSettings(subSettings)}
+        {widgetId === "twitchChat" && (
+          <TwitchChatSettings
+            settings={this.settings.twitchChat}
+            onToggle={this.toggleSubWidget}
+            onSave={this.timerSaveSettings}
+          />
+        )}
         {widgetId !== "positionBar" &&
           widgetId !== "positionBarRelative" &&
           widgetId !== "tvTower" &&
