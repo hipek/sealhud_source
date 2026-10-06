@@ -1,0 +1,18 @@
+name: sealhud
+
+services:
+  sealhud:
+    build:
+      context: .
+      args:
+        SENTRY_DSN: ${SENTRY_DSN:-}
+        RELEASE: ${RELEASE:-}
+    image: sealhud:latest
+    ports:
+      - "8333:8080"
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

@@ -68,6 +68,12 @@ import "./app.scss";
 import SvgIcon from "../svgIcon/svgIcon";
 import Tires from "../tires/tires";
 import TvTower from "../tvTower/tvTower";
+import TwitchChat from "../twitchChat/twitchChat";
+import TwitchChatSettings from "../twitchChat/twitchChatSettings";
+import {
+  twitchChatConfig,
+  twitchChatDefaultSettings,
+} from "../twitchChat/twitchChatConfig";
 
 interface IProps {}
 
@@ -974,6 +980,7 @@ export default class App extends React.Component<IProps> {
         y: 150,
       },
     },
+    twitchChat: twitchChatDefaultSettings(),
     graphs: {
       id: "graphs",
       enabled: false,
@@ -1708,6 +1715,7 @@ export default class App extends React.Component<IProps> {
         y: 150,
       },
     },
+    twitchChat: twitchChatDefaultSettings(),
     graphs: {
       id: "graphs",
       enabled: false,
@@ -2040,6 +2048,9 @@ export default class App extends React.Component<IProps> {
           this.toggleGainLossPermanentTower();
         }
       }
+      if (eResetId === "twitchChat") {
+        twitchChatConfig.reset();
+      }
       if (eResetId === "positionBar" && this.gainLossPermanentBar) {
         this.toggleGainLossPermanentBar();
       }
@@ -2256,6 +2267,9 @@ export default class App extends React.Component<IProps> {
       this.enterPressed = true;
       return;
     }
+    if (currentFocusIsInput()) {
+      return;
+    }
 
     if (e.key === "I" && e.shiftKey) {
       if (this.updateFunction) {
@@ -2383,13 +2397,20 @@ export default class App extends React.Component<IProps> {
         : this.shiftModifier
         ? -0.2
         : -0.01;
-    this.settings[widgetId].zoom = this.settings[widgetId].zoom + diff;
+    this.adjustZoom(widgetId, diff);
+  };
+
+  @action
+  public adjustZoom(widgetId: string, diff: number) {
+    if (this.lockHud || !this.settings[widgetId]) {
+      return;
+    }
     this.settings[widgetId].zoom = Math.max(
       0.1,
-      Math.min(3, this.settings[widgetId].zoom)
+      Math.min(3, this.settings[widgetId].zoom + diff)
     );
     this.saveSettings();
-  };
+  }
 
   @action
   private onMouseUp = () => {
@@ -3357,6 +3378,15 @@ export default class App extends React.Component<IProps> {
               settings={this.settings.crewChief}
             />
           )}
+        {this.settings.twitchChat.enabled && (
+          <TwitchChat
+            onMouseDown={this.onMouseDown}
+            onWheel={this.onWheel}
+            settings={this.settings.twitchChat}
+            channel={twitchChatConfig.channel}
+            botLogins={twitchChatConfig.botLogins}
+          />
+        )}
         {this.settings.overtakingAids.enabled && (
           <OvertakingAids
             onMouseDown={this.onMouseDown}
@@ -4294,11 +4324,19 @@ export default class App extends React.Component<IProps> {
         {widgetId === "positionBarRelative" && subSettings && this.renderPositionBarRelativeSettings(subSettings)}
         {widgetId === "tvTower" && subSettings && this.renderTvTowerSettings(subSettings)}
         {widgetId === "positionBar" && subSettings && this.renderPositionBarSettings(subSettings)}
+        {widgetId === "twitchChat" && (
+          <TwitchChatSettings
+            settings={this.settings.twitchChat}
+            onToggle={this.toggleSubWidget}
+            onSave={this.timerSaveSettings}
+          />
+        )}
         {widgetId !== "positionBar" &&
           widgetId !== "positionBarRelative" &&
           widgetId !== "tvTower" &&
           widgetId !== "manualStart" &&
           widgetId !== "spotting" &&
+          widgetId !== "twitchChat" &&
           subSettings &&
           this.renderGenericSubSettings(widgetId, subSettings)}
       </div>
