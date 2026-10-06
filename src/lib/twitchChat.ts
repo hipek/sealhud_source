@@ -40,6 +40,8 @@ export interface IChatMessage {
 	badges: string[];
 	fragments: ChatFragment[];
 	time: number;
+	// Set on messages restored from saved history after a page reload
+	restored?: boolean;
 }
 
 export interface IIrcLine {
@@ -141,6 +143,10 @@ export function parseIrcLine(line: string): IIrcLine | null {
 	return { tags, prefix, command, params };
 }
 
+function emoteUrl(id: string) {
+	return `${EMOTE_URL}${id}/default/dark/1.0`;
+}
+
 // Twitch emote offsets count code points, not UTF-16 units,
 // so the text is split with Array.from to keep emoji intact.
 export function buildFragments(
@@ -196,7 +202,7 @@ export function buildFragments(
 			type: 'emote',
 			id: range.id,
 			alt: chars.slice(range.start, range.end + 1).join(''),
-			url: `${EMOTE_URL}${range.id}/default/dark/1.0`
+			url: emoteUrl(range.id)
 		});
 		pos = range.end + 1;
 	});
@@ -236,6 +242,178 @@ export function fetchStreamStatus(
 		.then((resp) => (resp.ok ? resp.text() : ''))
 		.then(parseStreamStatus)
 		.catch(() => null);
+}
+
+// --- Chat history kept across HUD page reloads (e.g. session changes) ---
+
+export const HISTORY_TTL_MS = 10 * 60 * 1000;
+const HISTORY_VERSION = 1;
+const HISTORY_LOGIN_RE = /^[a-z0-9_]{1,25}$/;
+const HISTORY_BADGE_RE = /^[a-z0-9_-]{1,50}$/;
+const HISTORY_COLOR_RE = /^#[0-9a-f]{6}$/i;
+
+type JsonObject = { [key: string]: unknown };
+
+function isObject(value: unknown): value is JsonObject {
+	return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export interface IHistoryOptions {
+	maxMessages: number;
+	showEmotes: boolean;
+	hideBots: boolean;
+	botLogins: string[];
+}
+
+export function serializeHistory(
+	channel: string,
+	messages: IChatMessage[],
+	now: number
+): string {
+	return JSON.stringify({
+		v: HISTORY_VERSION,
+		channel,
+		savedAt: now,
+		messages: messages.map((m) => ({
+			id: m.id,
+			login: m.login,
+			displayName: m.displayName,
+			color: m.color,
+			badges: m.badges,
+			time: m.time,
+			// Emote URLs are not stored; they are rebuilt from the id on load
+			fragments: m.fragments.map((f) =>
+				f.type === 'emote'
+					? { type: 'emote', id: f.id, alt: f.alt }
+					: { type: 'text', text: f.text }
+			)
+		}))
+	});
+}
+
+function parseHistoryFragment(
+	value: unknown,
+	showEmotes: boolean
+): ChatFragment | null {
+	if (!isObject(value)) {
+		return null;
+	}
+	if (value.type === 'text' && typeof value.text === 'string') {
+		return { type: 'text', text: value.text };
+	}
+	if (
+		value.type === 'emote' &&
+		typeof value.id === 'string' &&
+		EMOTE_ID_RE.test(value.id) &&
+		typeof value.alt === 'string'
+	) {
+		return showEmotes
+			? { type: 'emote', id: value.id, alt: value.alt, url: emoteUrl(value.id) }
+			: { type: 'text', text: value.alt };
+	}
+	return null;
+}
+
+function parseHistoryMessage(
+	value: unknown,
+	options: IHistoryOptions
+): IChatMessage | null {
+	if (
+		!isObject(value) ||
+		typeof value.id !== 'string' ||
+		!value.id ||
+		value.id.length > 100 ||
+		typeof value.login !== 'string' ||
+		!HISTORY_LOGIN_RE.test(value.login) ||
+		typeof value.time !== 'number' ||
+		!isFinite(value.time) ||
+		!Array.isArray(value.fragments)
+	) {
+		return null;
+	}
+	const badges: string[] = Array.isArray(value.badges)
+		? value.badges.filter(
+				(b: unknown): b is string =>
+					typeof b === 'string' && HISTORY_BADGE_RE.test(b)
+			)
+		: [];
+	if (
+		options.hideBots &&
+		isBot(
+			value.login,
+			badges.indexOf('bot-badge') !== -1 ? 'bot-badge/1' : '',
+			options.botLogins
+		)
+	) {
+		return null;
+	}
+	const fragments: ChatFragment[] = [];
+	for (let i = 0; i < value.fragments.length; i++) {
+		const fragment = parseHistoryFragment(value.fragments[i], options.showEmotes);
+		if (!fragment) {
+			return null;
+		}
+		fragments.push(fragment);
+	}
+	return {
+		id: value.id,
+		login: value.login,
+		displayName:
+			typeof value.displayName === 'string' &&
+			value.displayName &&
+			value.displayName.length <= 50
+				? value.displayName
+				: value.login,
+		color:
+			typeof value.color === 'string' && HISTORY_COLOR_RE.test(value.color)
+				? value.color
+				: '',
+		badges,
+		fragments,
+		time: value.time,
+		restored: true
+	};
+}
+
+// Saved history is untrusted input: anything unexpected is dropped.
+export function parseHistory(
+	raw: string | null | undefined,
+	channel: string,
+	now: number,
+	options: IHistoryOptions
+): IChatMessage[] {
+	const clean = sanitizeChannel(channel);
+	if (!raw || !clean) {
+		return [];
+	}
+	let data: unknown;
+	try {
+		data = JSON.parse(raw);
+	} catch {
+		return [];
+	}
+	if (
+		!isObject(data) ||
+		data.v !== HISTORY_VERSION ||
+		data.channel !== clean ||
+		typeof data.savedAt !== 'number' ||
+		now - data.savedAt > HISTORY_TTL_MS ||
+		data.savedAt - now > 60000 ||
+		!Array.isArray(data.messages)
+	) {
+		return [];
+	}
+	const seen: { [id: string]: boolean } = {};
+	const messages: IChatMessage[] = [];
+	data.messages.forEach((value: unknown) => {
+		const msg = parseHistoryMessage(value, options);
+		if (msg && !seen[msg.id]) {
+			seen[msg.id] = true;
+			messages.push(msg);
+		}
+	});
+	messages.sort((a, b) => a.time - b.time);
+	return messages.slice(Math.max(0, messages.length - options.maxMessages));
 }
 
 interface IClientOptions {

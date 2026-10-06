@@ -10,7 +10,9 @@ import {
 	IChatMessage,
 	fetchStreamStatus,
 	IStreamStatus,
-	sanitizeChannel
+	sanitizeChannel,
+	serializeHistory,
+	parseHistory
 } from '../../lib/twitchChat';
 import { action, observable } from 'mobx';
 import { observer } from 'mobx-react';
@@ -28,6 +30,7 @@ const STATUS_POLL_MS = 60000;
 const FADE_AFTER_MS = 60000;
 const ZOOM_STEP = 0.05;
 const ZOOM_STEP_SHIFT = 0.2;
+const HISTORY_KEY = 'twitchChatHistory';
 
 const MOCK_MESSAGES: IChatMessage[] = [
 	{
@@ -106,6 +109,8 @@ export default class TwitchChat extends React.Component<IProps> {
 			lowPerformanceMode ? 500 : 250
 		);
 		this.statusTimer = setInterval(this.pollStatus, STATUS_POLL_MS);
+		// React doesn't unmount on a page reload, so save on pagehide too
+		window.addEventListener('pagehide', this.onPageHide);
 		this.start();
 	}
 
@@ -124,6 +129,9 @@ export default class TwitchChat extends React.Component<IProps> {
 	}
 
 	componentWillUnmount() {
+		window.removeEventListener('pagehide', this.onPageHide);
+		this.flush();
+		this.saveHistory();
 		this.stop();
 		if (this.flushTimer) {
 			clearInterval(this.flushTimer);
@@ -148,6 +156,7 @@ export default class TwitchChat extends React.Component<IProps> {
 			return;
 		}
 		const sub = this.props.settings.subSettings;
+		this.messages = this.loadHistory(channel);
 		this.client = new TwitchChatClient({
 			channel,
 			onMessage: this.onMessage,
@@ -161,6 +170,41 @@ export default class TwitchChat extends React.Component<IProps> {
 		this.client.connect();
 		this.pollStatus();
 	}
+
+	private loadHistory(channel: string): IChatMessage[] {
+		const sub = this.props.settings.subSettings;
+		try {
+			return parseHistory(localStorage[HISTORY_KEY], channel, Date.now(), {
+				maxMessages: this.maxMessages,
+				showEmotes: sub.showEmotes.enabled,
+				hideBots: sub.hideBots.enabled,
+				botLogins: this.props.botLogins
+			});
+		} catch {
+			return [];
+		}
+	}
+
+	private saveHistory() {
+		const channel = sanitizeChannel(this.props.channel);
+		if (!channel) {
+			return;
+		}
+		try {
+			localStorage[HISTORY_KEY] = serializeHistory(
+				channel,
+				this.messages,
+				Date.now()
+			);
+		} catch {
+			// Storage full or unavailable: history is a nice-to-have
+		}
+	}
+
+	private onPageHide = () => {
+		this.flush();
+		this.saveHistory();
+	};
 
 	private stop() {
 		if (this.client) {
@@ -181,11 +225,12 @@ export default class TwitchChat extends React.Component<IProps> {
 		if (login === null) {
 			this.pending = [];
 			this.messages = [];
-			return;
+		} else {
+			const keep = (m: IChatMessage) => m.login !== login.toLowerCase();
+			this.pending = this.pending.filter(keep);
+			this.messages = this.messages.filter(keep);
 		}
-		const keep = (m: IChatMessage) => m.login !== login.toLowerCase();
-		this.pending = this.pending.filter(keep);
-		this.messages = this.messages.filter(keep);
+		this.saveHistory();
 	};
 
 	@action
@@ -193,6 +238,7 @@ export default class TwitchChat extends React.Component<IProps> {
 		const keep = (m: IChatMessage) => m.id !== id;
 		this.pending = this.pending.filter(keep);
 		this.messages = this.messages.filter(keep);
+		this.saveHistory();
 	};
 
 	@action
@@ -229,6 +275,7 @@ export default class TwitchChat extends React.Component<IProps> {
 		}
 		if (next !== this.messages) {
 			this.messages = next;
+			this.saveHistory();
 		}
 	};
 
@@ -272,7 +319,10 @@ export default class TwitchChat extends React.Component<IProps> {
 
 	private renderMessage(msg: IChatMessage, showBadges: boolean) {
 		return (
-			<div key={msg.id} className="chatLine">
+			<div
+				key={msg.id}
+				className={classNames('chatLine', { restored: msg.restored })}
+			>
 				{showBadges &&
 					msg.badges.map((badge) =>
 						BADGE_LABELS[badge] ? (
