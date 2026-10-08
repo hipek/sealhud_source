@@ -1,6 +1,22 @@
 name: sealhud
 
 services:
+  twitch-proxy:
+    build:
+      context: ./backend/twitch_proxy
+    image: sealhud-twitch-proxy:latest
+    environment:
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+    ports:
+      - "8334:8000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
   sealhud:
     build:
       context: .

@@ -42,6 +42,12 @@ SealHUD can show the live chat of a Twitch channel, plus its viewer count, right
 
 The channel is shared by all three layouts. Messages from common bots (Nightbot, StreamElements, …) are hidden by default; use **Edit Bot List** to change which accounts are hidden.
 
+### Twitch viewer count proxy
+
+The optional backend at `http://localhost:8334/api/twitch/viewers?channel=CHANNEL` reads the viewer count from Twitch Helix. It returns `{"channel":"CHANNEL","viewer_count":N}`; offline channels return zero. The proxy obtains an app access token with Twitch's client credentials flow and refreshes it automatically before expiry. No refresh token needed.
+
+Create a Twitch application, copy `.env.example` to `.env`, and set `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`. Keep `.env` private and run `docker compose up --build twitch-proxy`. The credentials stay in the backend container and never go to the HUD. `/health` reports service health; `/api/twitch/viewers` returns a clear error if credentials are missing or Twitch is unavailable.
+
 ---
 
 ## 📦 Building Artifacts
