@@ -1,0 +1,44 @@
+name: Release
+
+# Push a version tag to build and publish a release:
+#   git tag v1.13 && git push origin v1.13
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build artifacts (npm ci + npm run build in Docker)
+        run: make artifacts
+
+      - name: Zip artifacts
+        run: |
+          cd .artifacts
+          zip -r "../sealhud-${GITHUB_REF_NAME}.zip" . -x .gitkeep
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ZIP="sealhud-${GITHUB_REF_NAME}.zip"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ZIP" \
+              --title "SealHUD $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
