@@ -3,3 +3,4 @@ dist
 .artifacts/*
 !.artifacts/.gitkeep
 .plans/
+.worktrees/
