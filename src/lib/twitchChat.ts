@@ -265,6 +265,24 @@ export interface IHistoryOptions {
 	botLogins: string[];
 }
 
+export function removeClearedUserMessages(
+	messages: IChatMessage[],
+	login: string | null
+): IChatMessage[] {
+	if (login === null) {
+		return [];
+	}
+	const cleanLogin = login.toLowerCase();
+	return messages.filter((message) => message.login !== cleanLogin);
+}
+
+export function removeClearedMessage(
+	messages: IChatMessage[],
+	id: string
+): IChatMessage[] {
+	return messages.filter((message) => message.id !== id);
+}
+
 export function serializeHistory(
 	channel: string,
 	messages: IChatMessage[],
@@ -407,7 +425,13 @@ export function parseHistory(
 	const messages: IChatMessage[] = [];
 	data.messages.forEach((value: unknown) => {
 		const msg = parseHistoryMessage(value, options);
-		if (msg && !seen[msg.id]) {
+		const age = msg ? now - msg.time : 0;
+		if (
+			msg &&
+			age <= HISTORY_TTL_MS &&
+			age >= -60000 &&
+			!seen[msg.id]
+		) {
 			seen[msg.id] = true;
 			messages.push(msg);
 		}

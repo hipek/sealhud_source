@@ -12,7 +12,9 @@ import {
 	IStreamStatus,
 	sanitizeChannel,
 	serializeHistory,
-	parseHistory
+	parseHistory,
+	removeClearedMessage,
+	removeClearedUserMessages
 } from '../../lib/twitchChat';
 import { action, observable } from 'mobx';
 import { observer } from 'mobx-react';
@@ -31,6 +33,7 @@ const FADE_AFTER_MS = 60000;
 const ZOOM_STEP = 0.05;
 const ZOOM_STEP_SHIFT = 0.2;
 const HISTORY_KEY = 'twitchChatHistory';
+const HISTORY_SAVE_DEBOUNCE_MS = 1000;
 
 const MOCK_MESSAGES: IChatMessage[] = [
 	{
@@ -101,6 +104,7 @@ export default class TwitchChat extends React.Component<IProps> {
 	pending: IChatMessage[] = [];
 	flushTimer: ReturnType<typeof setInterval> | null = null;
 	statusTimer: ReturnType<typeof setInterval> | null = null;
+	historySaveTimer: ReturnType<typeof setTimeout> | null = null;
 	statusRequest = 0;
 
 	componentDidMount() {
@@ -131,7 +135,7 @@ export default class TwitchChat extends React.Component<IProps> {
 	componentWillUnmount() {
 		window.removeEventListener('pagehide', this.onPageHide);
 		this.flush();
-		this.saveHistory();
+		this.flushHistorySave();
 		this.stop();
 		if (this.flushTimer) {
 			clearInterval(this.flushTimer);
@@ -201,9 +205,27 @@ export default class TwitchChat extends React.Component<IProps> {
 		}
 	}
 
+	private scheduleHistorySave() {
+		if (this.historySaveTimer) {
+			clearTimeout(this.historySaveTimer);
+		}
+		this.historySaveTimer = setTimeout(() => {
+			this.historySaveTimer = null;
+			this.saveHistory();
+		}, HISTORY_SAVE_DEBOUNCE_MS);
+	}
+
+	private flushHistorySave() {
+		if (this.historySaveTimer) {
+			clearTimeout(this.historySaveTimer);
+			this.historySaveTimer = null;
+		}
+		this.saveHistory();
+	}
+
 	private onPageHide = () => {
 		this.flush();
-		this.saveHistory();
+		this.flushHistorySave();
 	};
 
 	private stop() {
@@ -224,21 +246,18 @@ export default class TwitchChat extends React.Component<IProps> {
 	private onClearUser = (login: string | null) => {
 		if (login === null) {
 			this.pending = [];
-			this.messages = [];
 		} else {
-			const keep = (m: IChatMessage) => m.login !== login.toLowerCase();
-			this.pending = this.pending.filter(keep);
-			this.messages = this.messages.filter(keep);
+			this.pending = removeClearedUserMessages(this.pending, login);
 		}
-		this.saveHistory();
+		this.messages = removeClearedUserMessages(this.messages, login);
+		this.flushHistorySave();
 	};
 
 	@action
 	private onClearMessage = (id: string) => {
-		const keep = (m: IChatMessage) => m.id !== id;
-		this.pending = this.pending.filter(keep);
-		this.messages = this.messages.filter(keep);
-		this.saveHistory();
+		this.pending = removeClearedMessage(this.pending, id);
+		this.messages = removeClearedMessage(this.messages, id);
+		this.flushHistorySave();
 	};
 
 	@action
@@ -275,7 +294,7 @@ export default class TwitchChat extends React.Component<IProps> {
 		}
 		if (next !== this.messages) {
 			this.messages = next;
-			this.saveHistory();
+			this.scheduleHistorySave();
 		}
 	};
 
