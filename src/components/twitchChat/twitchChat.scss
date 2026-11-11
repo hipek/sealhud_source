@@ -132,6 +132,11 @@
     overflow-wrap: break-word;
   }
 
+  // Messages restored from history after a page reload
+  .chatLine.restored {
+    opacity: 0.6;
+  }
+
   .chatUser {
     font-weight: 700;
   }
